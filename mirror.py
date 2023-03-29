@@ -21,6 +21,25 @@ properties_to_copy = [
     "Video"
 ]
 
+DEFAULT_PAGE_COVER = "https://ik.imagekit.io/thatcsharpguy/video/thumbnails/default-thumbnail.png?updatedAt=1680120443520"
+
+def clear_database(database_id):
+    results = destination_client.databases.query(
+        **{
+            "database_id": database_id,
+            "sorts": [{"property": "Fecha de publicación", "direction": "ascending"}],
+        }
+    ).get("results")
+
+    for page in results:
+        page["page_id"] = page["id"]
+        page["archived"] = True
+        destination_client.pages.update(
+            **page
+        )
+
+clear_database(destination_database_id)
+
 # Get all pages from the source database
 results = source_client.databases.query(
     **{
@@ -38,18 +57,36 @@ results = source_client.databases.query(
 
 for page in results[:4]:
     page_properties = { prop : page["properties"][prop] for prop in properties_to_copy}
+    
+
+
     created = destination_client.pages.create(
         **{
             "parent": {"database_id": destination_database_id},
             "cover":{
                 "type": "external",
                 "external": {
-                    "url": "https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1065&q=80"
+                    "url": page_properties["Thumbnail"]["url"] or DEFAULT_PAGE_COVER
                 }
                 },
             "properties": page_properties
         }
     )
 
-# breakpoint()
-# pass
+    old_page_id = page["id"]
+    new_page_id = created['id']
+
+    blocks = source_client.blocks.children.list(block_id=old_page_id).get("results")
+
+    new_blocks = []
+    for block in blocks:
+        block["parent"] = {"page_id": new_page_id, 'type': 'page_id'} 
+        block["archived"] = False
+
+        properties_to_remove = ["id", "created_by", "created_time", "last_edited_by", "last_edited_time"]
+        for prop in properties_to_remove:
+            block.pop(prop)
+
+        new_blocks.append(block)
+
+    destination_client.blocks.children.append(block_id=new_page_id, children=new_blocks)
