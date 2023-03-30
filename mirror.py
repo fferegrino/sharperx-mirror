@@ -55,7 +55,7 @@ results = source_client.databases.query(
     }
 ).get("results")
 
-for page in results[:4]:
+for page in results:
     page_properties = { prop : page["properties"][prop] for prop in properties_to_copy}
     
 
